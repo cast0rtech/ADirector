@@ -1,13 +1,19 @@
 import { app, BrowserWindow, ipcMain } from 'electron';
 import path from 'path';
 import fs from 'fs';
+import { fileURLToPath } from 'url';
 import { FFmpegManager, StreamConfig } from './ffmpegManager.js';
 import { NdiOutputEngine } from './ndiOutput.js';
 import { VirtualCamEngine } from './virtualCamOutput.js';
 import { detectSystemCapabilities } from './systemCaps.js';
 
-// Manejo de directorio en Electron CJS
-const currentDir = typeof __dirname !== 'undefined' ? __dirname : process.cwd();
+// Directorio del módulo compatible con ESM (import.meta.url) y CJS (__dirname)
+let currentDir = '';
+try {
+  currentDir = path.dirname(fileURLToPath(import.meta.url));
+} catch (e) {
+  currentDir = typeof __dirname !== 'undefined' ? __dirname : process.cwd();
+}
 
 let mainWindow: BrowserWindow | null = null;
 const ffmpegManager = new FFmpegManager();
@@ -17,10 +23,10 @@ const virtualCam = new VirtualCamEngine();
 function createWindow() {
   const iconPath = path.join(currentDir, '../assets/icon.png');
 
-  // Buscar preload.cjs (o preload.js)
-  let preloadPath = path.join(currentDir, 'preload.cjs');
+  // Buscar preload.js o preload.cjs
+  let preloadPath = path.join(currentDir, 'preload.js');
   if (!fs.existsSync(preloadPath)) {
-    preloadPath = path.join(currentDir, 'preload.js');
+    preloadPath = path.join(currentDir, 'preload.cjs');
   }
 
   mainWindow = new BrowserWindow({
@@ -70,7 +76,7 @@ function createWindow() {
     console.log('[Electron] Cargando UI de escritorio desde dist/index.html');
     mainWindow.loadFile(distHtml);
   } else {
-    console.log('[Electron] Cargando UI desde servidor local https://localhost:8443');
+    console.log('[Electron] Cargando UI desde servidor local https://localhost:8443/studio');
     mainWindow.loadURL('https://localhost:8443/studio');
   }
 

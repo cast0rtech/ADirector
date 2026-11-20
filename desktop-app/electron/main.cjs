@@ -25,6 +25,7 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
 var import_electron = require("electron");
 var import_path2 = __toESM(require("path"), 1);
 var import_fs3 = __toESM(require("fs"), 1);
+var import_url = require("url");
 
 // desktop-app/electron/ffmpegManager.ts
 var import_child_process = require("child_process");
@@ -583,16 +584,22 @@ var VirtualCamEngine = class {
 };
 
 // desktop-app/electron/main.ts
-var currentDir = typeof __dirname !== "undefined" ? __dirname : process.cwd();
+var import_meta = {};
+var currentDir = "";
+try {
+  currentDir = import_path2.default.dirname((0, import_url.fileURLToPath)(import_meta.url));
+} catch (e) {
+  currentDir = typeof __dirname !== "undefined" ? __dirname : process.cwd();
+}
 var mainWindow = null;
 var ffmpegManager = new FFmpegManager();
 var ndiOutput = new NdiOutputEngine("ADIRECTOR (Program)");
 var virtualCam = new VirtualCamEngine();
 function createWindow() {
   const iconPath = import_path2.default.join(currentDir, "../assets/icon.png");
-  let preloadPath = import_path2.default.join(currentDir, "preload.cjs");
+  let preloadPath = import_path2.default.join(currentDir, "preload.js");
   if (!import_fs3.default.existsSync(preloadPath)) {
-    preloadPath = import_path2.default.join(currentDir, "preload.js");
+    preloadPath = import_path2.default.join(currentDir, "preload.cjs");
   }
   mainWindow = new import_electron.BrowserWindow({
     width: 1480,
@@ -632,7 +639,7 @@ function createWindow() {
     console.log("[Electron] Cargando UI de escritorio desde dist/index.html");
     mainWindow.loadFile(distHtml);
   } else {
-    console.log("[Electron] Cargando UI desde servidor local https://localhost:8443");
+    console.log("[Electron] Cargando UI desde servidor local https://localhost:8443/studio");
     mainWindow.loadURL("https://localhost:8443/studio");
   }
   mainWindow.webContents.on("certificate-error", (event, url, error, certificate, callback) => {
@@ -698,3 +705,4 @@ import_electron.app.on("window-all-closed", () => {
     import_electron.app.quit();
   }
 });
+//# sourceMappingURL=main.cjs.map

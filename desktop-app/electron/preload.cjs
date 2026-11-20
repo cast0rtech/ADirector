@@ -40,3 +40,4 @@ import_electron.contextBridge.exposeInMainWorld("electronAPI", {
     return () => import_electron.ipcRenderer.removeListener("stream:error", handler);
   }
 });
+//# sourceMappingURL=preload.js.map
