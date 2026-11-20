@@ -1,0 +1,78 @@
+{
+  "name": "adirector",
+  "version": "1.0.0",
+  "description": "Multi-camera LAN WebRTC video production system for Desktop and Mobile",
+  "private": true,
+  "type": "module",
+  "main": "desktop-app/electron/main.js",
+  "scripts": {
+    "build:server": "tsc -p server/tsconfig.json",
+    "start:server": "tsx server/src/server.ts",
+    "dev:server": "tsx watch server/src/server.ts",
+    "dev": "tsx watch server/src/server.ts",
+    "dist": "electron-builder",
+    "dist:mac": "electron-builder --mac",
+    "dist:win": "electron-builder --win",
+    "dist:linux": "electron-builder --linux"
+  },
+  "build": {
+    "appId": "com.adirector.studio",
+    "productName": "ADirector Studio",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "desktop-app/electron/**/*",
+      "desktop-app/dist/**/*",
+      "desktop-app/assets/**/*",
+      "server/**/*",
+      "mobile-web/public/**/*",
+      "types/**/*"
+    ],
+    "mac": {
+      "icon": "desktop-app/assets/icon.png",
+      "category": "public.app-category.video",
+      "target": [
+        "dmg",
+        "zip"
+      ]
+    },
+    "win": {
+      "icon": "desktop-app/assets/icon.ico",
+      "target": [
+        "nsis"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "installerIcon": "desktop-app/assets/icon.ico",
+      "uninstallerIcon": "desktop-app/assets/icon.ico",
+      "installerHeaderIcon": "desktop-app/assets/icon.ico"
+    },
+    "linux": {
+      "icon": "desktop-app/assets/icon.png",
+      "category": "AudioVideo",
+      "target": [
+        "AppImage",
+        "deb"
+      ]
+    }
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "qrcode": "^1.5.4",
+    "selfsigned": "^2.4.1",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.0",
+    "@types/node": "^22.10.2",
+    "@types/qrcode": "^1.5.5",
+    "@types/ws": "^8.5.13",
+    "electron": "^33.2.1",
+    "electron-builder": "^25.1.8",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}

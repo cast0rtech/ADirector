@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#090d16">
+  <title>ADirector Mobile Cam</title>
+  <link rel="icon" type="image/png" href="assets/favicon.png">
+  <link rel="apple-touch-icon" href="assets/logo.png">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- MODO AHORRO DE ENERGÍA (Pantalla OLED 100% negra) -->
+  <div id="battery-saver-overlay" class="saver-overlay hidden">
+    <div class="saver-content">
+      <div class="saver-live-dot"></div>
+      <p class="saver-title">MODO AHORRO DE ENERGÍA ACTIVO</p>
+      <p class="saver-subtitle">Transmitiendo en segundo plano. Toca 2 veces para reactivar.</p>
+    </div>
+  </div>
+
+  <div id="app">
+    <!-- Vista previa de video local -->
+    <div class="video-container">
+      <video id="preview" autoplay playsinline webkit-playsinline muted></video>
+      <div id="tally-border" class="tally-indicator"></div>
+    </div>
+
+    <!-- Barra superior HUD -->
+    <header class="hud-top">
+      <div class="badge-group">
+        <div id="status-badge" class="badge">
+          <span class="dot"></span>
+          <span id="status-text">Iniciando...</span>
+        </div>
+        <div id="stats-badge" class="badge font-mono">-- fps | -- kbps</div>
+      </div>
+
+      <div class="quick-actions">
+        <!-- Botón Ahorro de batería -->
+        <button id="btn-battery-saver" class="icon-btn" title="Modo Pantalla Oscura (OLED)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="2" y="7" width="16" height="10" rx="2" ry="2"/>
+            <line x1="22" y1="11" x2="22" y2="13"/>
+            <line x1="6" y1="11" x2="10" y2="11"/>
+          </svg>
+        </button>
+
+        <!-- Botón Ajustes / Dispositivos -->
+        <button id="btn-open-settings" class="icon-btn" title="Ajustes de Dispositivos">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <!-- Barra inferior HUD de Controles -->
+    <footer class="hud-bottom">
+      <!-- Selector rápido de cámaras -->
+      <div class="camera-pills-container">
+        <div id="camera-pills" class="camera-pills"></div>
+      </div>
+
+      <div class="action-dock">
+        <!-- Alternar Audio / Micrófono -->
+        <button id="btn-toggle-mic" class="control-btn" title="Silenciar/Activar Micro">
+          <svg id="icon-mic-on" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+          <svg id="icon-mic-off" class="hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="1" y1="1" x2="23" y2="23"/><path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V5a3 3 0 0 0-5.94-.6"/><path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+        </button>
+
+        <!-- Botón Principal TRANSMITIR / EN VIVO -->
+        <button id="btn-broadcast" class="broadcast-btn">
+          <span class="btn-ripple"></span>
+          <span class="btn-label">TRANSMITIR</span>
+        </button>
+
+        <!-- Alternar Linterna (Torch) -->
+        <button id="btn-toggle-torch" class="control-btn" title="Flash/Linterna">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+        </button>
+      </div>
+    </footer>
+
+    <!-- Panel lateral de Configuración de Dispositivos (Cámaras y Micrófonos) -->
+    <aside id="drawer-settings" class="drawer hidden">
+      <div class="drawer-header">
+        <h3>Dispositivos de Entrada</h3>
+        <button id="btn-close-settings" class="close-btn">&times;</button>
+      </div>
+
+      <div class="drawer-body">
+        <div class="form-group">
+          <label for="select-camera">Seleccionar Cámara:</label>
+          <select id="select-camera" class="custom-select"></select>
+          <span class="field-hint">Admite lentes traseras múltiples (1x, Gran Angular, Teleobjetivo).</span>
+        </div>
+
+        <div class="form-group">
+          <label for="select-mic">Seleccionar Micrófono:</label>
+          <select id="select-mic" class="custom-select"></select>
+          <span class="field-hint">El cambio de cámara no interrumpe el micrófono.</span>
+        </div>
+
+        <div class="form-group">
+          <label>Resolución Objetivo:</label>
+          <select id="select-resolution" class="custom-select">
+            <option value="1080p">Full HD 1080p (1920x1080) @ 30fps</option>
+            <option value="720p" selected>HD 720p (1280x720) @ 30fps</option>
+            <option value="480p">SD 480p (854x480) @ 30fps</option>
+          </select>
+        </div>
+
+        <div class="system-status-box">
+          <p><strong>Wake Lock (Pantalla activa):</strong> <span id="wakelock-status">Inactivo</span></p>
+          <p><strong>Transporte de Red:</strong> <span id="network-status">Wi-Fi Online</span></p>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
