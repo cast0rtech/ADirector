@@ -1,6 +1,10 @@
 # ADirector: LAN Multi-Camera WebRTC Studio
 
-Sistema de producción y recepción de video/audio en tiempo real en red local (LAN) desde navegadores móviles (iOS Safari, Android Chrome) hacia una aplicación de escritorio (Windows, macOS, Linux, ChromeOS).
+Sistema de producción y realización de video y audio en tiempo real sobre red local (LAN) desde navegadores móviles (iOS Safari, Android Chrome) hacia una aplicación de escritorio (Windows, macOS, Linux, ChromeOS).
+
+> 📘 **¿Buscando el manual de instrucciones?** Consulta la **[Guía Completa de Usuario](file:///Users/castordfedez/Desktop/ADirector/docs/GUIA_USUARIO.md)** para aprender a conectar teléfonos, realizar la mezcla de audio, emitir por RTMP y usar NDI / Cámara Virtual.
+> 
+> ⚙️ **Detalles de arquitectura nativa:** Consulta la documentación técnica de **[Salidas NDI y Cámara Virtual](file:///Users/castordfedez/Desktop/ADirector/docs/NATIVE_OUTPUTS.md)**.
 
 ---
 
