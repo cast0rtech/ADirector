@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { WebRtcHostReceiver, StreamEvent } from './WebRtcHostReceiver.js';
 import { AudioMixerEngine, AudioChannelState } from './audio/AudioMixerEngine.js';
-import { ProgramSwitcherEngine } from './video/ProgramSwitcherEngine.js';
+import { ProgramSwitcherEngine, LayoutMode, CompositionSlot } from './video/ProgramSwitcherEngine.js';
 import { MultiviewTile } from './components/MultiviewTile.js';
 import { ProgramMonitor } from './components/ProgramMonitor.js';
+import { LayoutController } from './components/LayoutController.js';
 import { AudioMixerDock } from './components/AudioMixerDock.js';
 import { BroadcastControls } from './components/BroadcastControls.js';
 import { DeviceInfo, RemoteCommand } from '../../types/signaling.js';
@@ -16,8 +17,19 @@ export const App: React.FC = () => {
 
   // Estado de Cámaras y Streams
   const [streams, setStreams] = useState<Map<string, { stream: MediaStream; device: DeviceInfo }>>(new Map());
-  const [programPeerId, setProgramPeerId] = useState<string | null>(null);
   const [fps, setFps] = useState(60);
+
+  // Estado de Composición y Layouts
+  const [currentLayout, setCurrentLayout] = useState<LayoutMode>('single');
+  const [currentResolution, setCurrentResolution] = useState<'1080p' | '1440p' | '2.7k'>('1080p');
+  const [slots, setSlots] = useState<CompositionSlot[]>(() => programSwitcher.getAllSlots());
+
+  // Estado de Compartir Pantalla del PC
+  const [screenStream, setScreenStream] = useState<MediaStream | null>(null);
+  const [isScreenSharing, setIsScreenSharing] = useState(false);
+
+  // Cache de elementos <video> para alimentar los slots de composición
+  const videoElementsRef = useRef<Map<string, HTMLVideoElement>>(new Map());
 
   // Estado del Mezclador de Audio
   const [audioChannels, setAudioChannels] = useState<AudioChannelState[]>([]);
@@ -38,6 +50,110 @@ export const App: React.FC = () => {
   const receiverRef = useRef<WebRtcHostReceiver | null>(null);
 
   // =========================================================================
+  // GESTIÓN DE COMPARTIR PANTALLA DEL PC (SCREEN SHARE)
+  // =========================================================================
+
+  const handleToggleScreenShare = async () => {
+    if (isScreenSharing && screenStream) {
+      // Detener captura de pantalla
+      screenStream.getTracks().forEach((t) => t.stop());
+      setScreenStream(null);
+      setIsScreenSharing(false);
+
+      // Si la pantalla estaba en algún slot, limpiarlo
+      slots.forEach((s, idx) => {
+        if (s.peerId === 'screen-share') {
+          programSwitcher.setSlot(idx, null, null, `Slot ${idx + 1}`);
+        }
+      });
+      setSlots(programSwitcher.getAllSlots());
+      audioMixer.removeChannel('screen-share');
+      setAudioChannels(audioMixer.getAllChannels());
+    } else {
+      try {
+        const stream = await navigator.mediaDevices.getDisplayMedia({
+          video: { frameRate: 60 },
+          audio: true, // Capturar también el audio del PC si el usuario lo comparte
+        });
+
+        setScreenStream(stream);
+        setIsScreenSharing(true);
+
+        // Cuando el usuario pulsa "Dejar de compartir" en el aviso del sistema operativo
+        stream.getVideoTracks()[0].onended = () => {
+          setIsScreenSharing(false);
+          setScreenStream(null);
+        };
+
+        // Si tiene audio de sistema, agregarlo al mezclador de audio
+        const audioTracks = stream.getAudioTracks();
+        if (audioTracks.length > 0) {
+          audioMixer.addChannel('screen-share', 'Audio PC (Screen)', audioTracks[0]);
+          setAudioChannels(audioMixer.getAllChannels());
+        }
+
+        // Si no hay nada en el slot 0 o si estamos en PiP, colocarlo automáticamente
+        const currentSlot0 = programSwitcher.getSlot(0);
+        if (!currentSlot0.peerId) {
+          // Asignar al slot 0
+          setTimeout(() => {
+            const vEl = videoElementsRef.current.get('screen-share');
+            if (vEl) {
+              programSwitcher.setSlot(0, 'screen-share', vEl, 'Pantalla PC');
+              setSlots(programSwitcher.getAllSlots());
+            }
+          }, 100);
+        }
+      } catch (err) {
+        console.warn('[ScreenShare] El usuario canceló la captura de pantalla:', err);
+      }
+    }
+  };
+
+  // =========================================================================
+  // CONTROL DE COMPOSICIÓN, SLOTS Y RESOLUCIÓN HASTA 2.7K
+  // =========================================================================
+
+  const handleLayoutChange = (layout: LayoutMode) => {
+    setCurrentLayout(layout);
+    programSwitcher.setLayout(layout);
+  };
+
+  const handleResolutionChange = (resId: '1080p' | '1440p' | '2.7k') => {
+    setCurrentResolution(resId);
+    programSwitcher.setResolution(resId);
+  };
+
+  const handleAssignSlot = (slotIndex: number, peerId: string, videoEl?: HTMLVideoElement) => {
+    const vEl = videoEl || videoElementsRef.current.get(peerId) || null;
+    let label = 'Vacío';
+
+    if (peerId === 'screen-share') {
+      label = 'Pantalla PC';
+    } else if (peerId) {
+      const dev = streams.get(peerId);
+      label = dev?.device.name || `Cámara ${peerId.slice(0, 4)}`;
+    }
+
+    programSwitcher.setSlot(slotIndex, peerId || null, vEl, label);
+    setSlots(programSwitcher.getAllSlots());
+  };
+
+  const handleCutToProgram = (peerId: string, videoEl: HTMLVideoElement) => {
+    videoElementsRef.current.set(peerId, videoEl);
+    let label = 'Cámara';
+    if (peerId === 'screen-share') {
+      label = 'Pantalla PC';
+    } else {
+      label = streams.get(peerId)?.device.name || 'Cámara 1';
+    }
+
+    // El clic primario asigna al Slot 1 (Principal)
+    programSwitcher.cutTo(peerId, videoEl, label);
+    setSlots(programSwitcher.getAllSlots());
+  };
+
+  // =========================================================================
   // GESTIÓN DE SALIDA DE MEDIOS (MEDIARECORDER -> IPC -> FFMPEG)
   // =========================================================================
 
@@ -49,7 +165,6 @@ export const App: React.FC = () => {
     const masterAudio = audioMixer.getMasterAudioStream();
     const combinedStream = programSwitcher.getMasterProgramStream(masterAudio);
 
-    // Priorizar codecs con aceleración por hardware compatibles
     let mimeType = 'video/webm;codecs=h264,opus';
     if (!MediaRecorder.isTypeSupported(mimeType)) {
       mimeType = 'video/webm;codecs=vp8,opus';
@@ -61,7 +176,7 @@ export const App: React.FC = () => {
     try {
       const recorder = new MediaRecorder(combinedStream, {
         mimeType,
-        videoBitsPerSecond: 8000000,
+        videoBitsPerSecond: 12000000, // Alto bitrate para 2.7K
       });
 
       recorder.ondataavailable = async (event) => {
@@ -71,10 +186,8 @@ export const App: React.FC = () => {
         }
       };
 
-      // Fragmentos de 250ms para mantener latencia ultra-baja en el pipeline stdin de FFmpeg
       recorder.start(250);
       mediaRecorderRef.current = recorder;
-      console.log(`[MediaRecorder] Pipeline iniciado (${mimeType})`);
     } catch (err) {
       console.error('[MediaRecorder] Error al iniciar captura:', err);
     }
@@ -84,7 +197,6 @@ export const App: React.FC = () => {
     if (mediaRecorderRef.current) {
       mediaRecorderRef.current.stop();
       mediaRecorderRef.current = null;
-      console.log('[MediaRecorder] Pipeline detenido');
     }
   }, []);
 
@@ -107,7 +219,7 @@ export const App: React.FC = () => {
   };
 
   // =========================================================================
-  // CICLO DE VIDA DEL SERVICIO WEBRTC Y RECEPCIÓN DE DISPOSITIVOS
+  // CICLO DE VIDA DE SEÑALIZACIÓN Y DISPOSITIVOS
   // =========================================================================
 
   useEffect(() => {
@@ -144,13 +256,17 @@ export const App: React.FC = () => {
         return next;
       });
 
+      videoElementsRef.current.delete(peerId);
       audioMixer.removeChannel(peerId);
       setAudioChannels(audioMixer.getAllChannels());
 
-      if (programSwitcher.getActivePeerId() === peerId) {
-        programSwitcher.cutTo(null, null);
-        setProgramPeerId(null);
-      }
+      // Si la cámara eliminada estaba en algún slot, limpiarlo
+      slots.forEach((s, idx) => {
+        if (s.peerId === peerId) {
+          programSwitcher.setSlot(idx, null, null, `Slot ${idx + 1}`);
+        }
+      });
+      setSlots(programSwitcher.getAllSlots());
     };
 
     audioMixer.onLevelsUpdate = (levels, masterLevel) => {
@@ -162,18 +278,12 @@ export const App: React.FC = () => {
       setFps(currentFps);
     };
 
-    // Escuchar estadísticas y errores desde el proceso principal de Electron
     let unsubscribeStats: (() => void) | undefined;
     let unsubscribeErrors: (() => void) | undefined;
 
     if (window.electronAPI) {
-      unsubscribeStats = window.electronAPI.onStreamStats((stats) => {
-        setStreamStats(stats);
-      });
-
-      unsubscribeErrors = window.electronAPI.onStreamError((err) => {
-        alert(`Error en salida de transmisión: ${err}`);
-      });
+      unsubscribeStats = window.electronAPI.onStreamStats((stats) => setStreamStats(stats));
+      unsubscribeErrors = window.electronAPI.onStreamError((err) => alert(`Error: ${err}`));
     }
 
     receiver.connect();
@@ -187,11 +297,6 @@ export const App: React.FC = () => {
       unsubscribeErrors?.();
     };
   }, [audioMixer, programSwitcher, stopMediaRecorderPipeline]);
-
-  const handleCutToProgram = (peerId: string, videoEl: HTMLVideoElement) => {
-    programSwitcher.cutTo(peerId, videoEl);
-    setProgramPeerId(peerId);
-  };
 
   const handleSendCommand = (peerId: string, command: RemoteCommand) => {
     receiverRef.current?.sendRemoteCommand(peerId, command);
@@ -212,7 +317,23 @@ export const App: React.FC = () => {
     setAudioChannels(audioMixer.getAllChannels());
   };
 
-  const activeCameraName = programPeerId ? streams.get(programPeerId)?.device.name || 'Cámara 1' : '';
+  // Lista de fuentes disponibles para asignar a slots
+  const availableSources = useMemo(() => {
+    const list: Array<{ id: string; name: string; isScreen?: boolean }> = [];
+
+    if (isScreenSharing && screenStream) {
+      list.push({ id: 'screen-share', name: 'Pantalla PC (Screen)', isScreen: true });
+    }
+
+    for (const [id, item] of streams.entries()) {
+      list.push({ id, name: item.device.name || `Cámara ${id.slice(0, 4)}` });
+    }
+
+    return list;
+  }, [streams, isScreenSharing, screenStream]);
+
+  // Nombre de la cámara activa en Slot 0
+  const activeCameraName = slots[0]?.label || 'STANDBY';
 
   return (
     <div
@@ -239,7 +360,6 @@ export const App: React.FC = () => {
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-          {/* Logo Oficial de ADirector */}
           <img
             src="/assets/logo.png"
             alt="ADirector Mascot"
@@ -270,7 +390,7 @@ export const App: React.FC = () => {
           </span>
         </div>
 
-        {/* Controles de Grabación FFmpeg y Transmisión RTMP */}
+        {/* Controles de Grabación, RTMP, NDI y VCam */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
           <BroadcastControls
             onStartOutput={handleStartOutput}
@@ -302,65 +422,96 @@ export const App: React.FC = () => {
       </header>
 
       {/* Espacio de trabajo principal */}
-      <div style={{ display: 'flex', flex: 1, overflow: 'hidden', padding: '16px', gap: '16px' }}>
-        {/* Monitor de Salida Maestra (Program) */}
-        <div style={{ flex: '0 0 45%', display: 'flex', flexDirection: 'column' }}>
+      <div style={{ display: 'flex', flex: 1, overflow: 'hidden', padding: '14px', gap: '14px' }}>
+        {/* Monitor de Salida Maestra (Program) y Controlador de Layouts */}
+        <div style={{ flex: '0 0 46%', display: 'flex', flexDirection: 'column', overflowY: 'auto' }}>
           <ProgramMonitor engine={programSwitcher} activeCameraName={activeCameraName} fps={fps} />
 
-          <div style={{ marginTop: '14px', background: '#090d16', padding: '14px', borderRadius: '8px', fontSize: '12px' }}>
-            <strong>Motor de Salida FFmpeg:</strong>
-            <p style={{ margin: '4px 0 0', color: '#94a3b8' }}>
-              La señal combinada de <code>canvas.captureStream(60)</code> y el <code>AudioContext Master Destination</code> se transmite directamente al pipe STDIN de FFmpeg para grabación local en H.264 / MP4 y retransmisión RTMP en vivo.
-            </p>
-          </div>
+          {/* Controlador de Composición Multicámara (1, 2, 3 o 4 fuentes) y Pantalla PC */}
+          <LayoutController
+            engine={programSwitcher}
+            currentLayout={currentLayout}
+            onLayoutChange={handleLayoutChange}
+            currentResolution={currentResolution}
+            onResolutionChange={handleResolutionChange}
+            availableSources={availableSources}
+            slots={slots}
+            onAssignSlot={(idx, peerId) => handleAssignSlot(idx, peerId)}
+            isScreenSharing={isScreenSharing}
+            onToggleScreenShare={handleToggleScreenShare}
+          />
         </div>
 
-        {/* Cuadrícula Multivista */}
+        {/* Cuadrícula Multivista (Cámaras Móviles + Pantalla PC) */}
         <div
           style={{
             flex: 1,
             background: '#090d16',
             borderRadius: '12px',
             border: '1px solid rgba(255,255,255,0.08)',
-            padding: '16px',
+            padding: '14px',
             display: 'flex',
             flexDirection: 'column',
           }}
         >
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
-            <h3 style={{ margin: 0, fontSize: '14px', fontWeight: 700, color: '#94a3b8' }}>
-              MULTIVISTA ({streams.size} CÁMARAS CONECTADAS)
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
+            <h3 style={{ margin: 0, fontSize: '13px', fontWeight: 700, color: '#94a3b8' }}>
+              FUENTES DISPONIBLES ({availableSources.length} ENLACES ACTIVOS)
             </h3>
-            <span style={{ fontSize: '11px', color: '#64748b' }}>Haz clic en una cámara para pasarla a Program</span>
+            <span style={{ fontSize: '11px', color: '#64748b' }}>
+              Clic para Slot 1 (Principal) o usa '+ Slot' para asignar a recuadros PiP / Split / Quad
+            </span>
           </div>
 
           <div
             style={{
               display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',
-              gap: '14px',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))',
+              gap: '12px',
               overflowY: 'auto',
               flex: 1,
             }}
           >
+            {/* Fuente especial: Compartir Pantalla PC */}
+            {isScreenSharing && screenStream && (
+              <MultiviewTile
+                key="screen-share"
+                peerId="screen-share"
+                device={{ id: 'screen-share', name: '🖥️ Pantalla PC', role: 'camera' }}
+                stream={screenStream}
+                isProgram={slots[0]?.peerId === 'screen-share'}
+                assignedSlotIndex={slots.findIndex((s) => s.peerId === 'screen-share')}
+                audioLevel={audioLevels.get('screen-share')?.level || 0}
+                peakDb={audioLevels.get('screen-share')?.peakDb || -60}
+                onCutToProgram={handleCutToProgram}
+                onAssignToSlot={(slotIdx, pId, vEl) => handleAssignSlot(slotIdx, pId, vEl)}
+                isScreen={true}
+              />
+            )}
+
+            {/* Cámaras móviles conectadas */}
             {Array.from(streams.entries()).map(([peerId, { stream, device }]) => {
               const levelData = audioLevels.get(peerId) || { level: 0, peakDb: -60 };
+              const assignedIndex = slots.findIndex((s) => s.peerId === peerId);
+
               return (
                 <MultiviewTile
                   key={peerId}
                   peerId={peerId}
                   device={device}
                   stream={stream}
-                  isProgram={programPeerId === peerId}
+                  isProgram={slots[0]?.peerId === peerId}
+                  assignedSlotIndex={assignedIndex !== -1 ? assignedIndex : undefined}
                   audioLevel={levelData.level}
                   peakDb={levelData.peakDb}
                   onCutToProgram={handleCutToProgram}
+                  onAssignToSlot={(slotIdx, pId, vEl) => handleAssignSlot(slotIdx, pId, vEl)}
                   onSendCommand={handleSendCommand}
                 />
               );
             })}
 
-            {streams.size === 0 && (
+            {availableSources.length === 0 && (
               <div
                 style={{
                   gridColumn: '1 / -1',
@@ -374,20 +525,37 @@ export const App: React.FC = () => {
                   borderRadius: '12px',
                 }}
               >
-                <p style={{ margin: '0 0 10px 0', fontSize: '15px' }}>Esperando cámaras móviles en la red local...</p>
-                <button
-                  onClick={() => setShowQrModal(true)}
-                  style={{
-                    padding: '8px 16px',
-                    background: '#1e293b',
-                    color: '#fff',
-                    border: '1px solid rgba(255,255,255,0.1)',
-                    borderRadius: '6px',
-                    cursor: 'pointer',
-                  }}
-                >
-                  Ver Código QR
-                </button>
+                <p style={{ margin: '0 0 10px 0', fontSize: '14px' }}>
+                  No hay cámaras móviles conectadas ni pantalla compartida.
+                </p>
+                <div style={{ display: 'flex', gap: '10px' }}>
+                  <button
+                    onClick={() => setShowQrModal(true)}
+                    style={{
+                      padding: '8px 14px',
+                      background: '#1e293b',
+                      color: '#fff',
+                      border: '1px solid rgba(255,255,255,0.1)',
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Vincular Móvil (QR)
+                  </button>
+                  <button
+                    onClick={handleToggleScreenShare}
+                    style={{
+                      padding: '8px 14px',
+                      background: '#2563eb',
+                      color: '#fff',
+                      border: 'none',
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Compartir Pantalla PC
+                  </button>
+                </div>
               </div>
             )}
           </div>

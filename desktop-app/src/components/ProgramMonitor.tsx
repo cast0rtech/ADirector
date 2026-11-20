@@ -1,5 +1,5 @@
 import React, { useRef, useEffect } from 'react';
-import { ProgramSwitcherEngine } from '../video/ProgramSwitcherEngine.js';
+import { ProgramSwitcherEngine, RESOLUTIONS } from '../video/ProgramSwitcherEngine.js';
 
 interface ProgramMonitorProps {
   engine: ProgramSwitcherEngine;
@@ -20,7 +20,16 @@ export const ProgramMonitor: React.FC<ProgramMonitorProps> = ({ engine, activeCa
       canvas.style.borderRadius = '8px';
       containerRef.current.appendChild(canvas);
     }
-  }, [engine]);
+  }, [engine, engine.width, engine.height]);
+
+  const resConfig = RESOLUTIONS[engine.currentResolutionId] || { width: 1920, height: 1080 };
+  const layoutNames: Record<string, string> = {
+    single: '1 CÁMARA (SOLO)',
+    pip: '2 CÁMARAS (PiP)',
+    split: '2 CÁMARAS (SPLIT)',
+    triview: '3 CÁMARAS (TRI-VIEW)',
+    quad: '4 CÁMARAS (GRID 2x2)',
+  };
 
   return (
     <div
@@ -57,10 +66,10 @@ export const ProgramMonitor: React.FC<ProgramMonitorProps> = ({ engine, activeCa
               background: '#fff',
             }}
           />
-          PROGRAM OUTPUT (SALIDA CONTINUA 1080p)
+          SALIDA PROGRAM ({layoutNames[engine.currentLayout] || 'SOLO'})
         </div>
         <div style={{ fontFamily: 'monospace', fontSize: '12px' }}>
-          {activeCameraName || 'STANDBY'} | {fps} FPS | 1920x1080
+          {activeCameraName || 'STANDBY'} | {fps} FPS | {resConfig.width}x{resConfig.height}
         </div>
       </div>
 

@@ -358,6 +358,12 @@ class MobileDirectorClient {
 
   getResolutionConstraints() {
     const res = this.dom.selectResolution.value;
+    if (res === '2.7k') {
+      return { width: { ideal: 2720, min: 2560 }, height: { ideal: 1530, min: 1440 }, frameRate: { ideal: 30 } };
+    }
+    if (res === '1440p') {
+      return { width: { ideal: 2560, min: 1920 }, height: { ideal: 1440, min: 1080 }, frameRate: { ideal: 30 } };
+    }
     if (res === '1080p') {
       return { width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 30 } };
     }
