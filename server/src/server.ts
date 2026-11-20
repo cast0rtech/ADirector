@@ -95,6 +95,16 @@ async function bootstrap() {
   // Iniciar servidor de señalización WebSockets en /ws
   const signaling = new SignalingServer(server);
 
+  server.on('error', (err: any) => {
+    if (err.code === 'EADDRINUSE') {
+      console.error(`\n❌ Error fatal: El puerto HTTPS ${PORT} ya está en uso.`);
+      console.error(`   Cierra el proceso anterior o usa otro puerto: PORT=9443 npm run dev:server\n`);
+    } else {
+      console.error('Error en el servidor HTTPS:', err);
+    }
+    process.exit(1);
+  });
+
   server.listen(PORT, '0.0.0.0', async () => {
     const { terminal } = await generateQrCodes(mobileCamUrl);
 
@@ -130,11 +140,21 @@ async function bootstrap() {
     });
 
     const redirectServer = http.createServer(redirectApp);
+
+    redirectServer.on('error', (err: any) => {
+      // Si el puerto 8080 ya está en uso por otro servicio, no tumbar el servidor principal
+      if (err.code === 'EADDRINUSE') {
+        console.log(`[HTTP Redirection] Nota: Puerto ${HTTP_PORT} ocupado por otra app. Redirección HTTP secundaria desactivada.`);
+      } else {
+        console.warn(`[HTTP Redirection] Aviso: ${err.message}`);
+      }
+    });
+
     redirectServer.listen(HTTP_PORT, '0.0.0.0', () => {
-      console.log(`[HTTP Redirection] Redireccionando http://*:8080 -> https://*:${PORT}`);
+      console.log(`[HTTP Redirection] Redireccionando http://*:${HTTP_PORT} -> https://*:${PORT}`);
     });
   } catch (e) {
-    // Si el puerto 8080 está ocupado, ignorar
+    // Silencioso ante cualquier excepción síncrona
   }
 
   const shutdown = () => {
