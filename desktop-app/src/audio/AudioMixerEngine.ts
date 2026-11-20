@@ -21,6 +21,9 @@ export class AudioMixerEngine {
   private masterGain: GainNode | null = null;
   private masterDestination: MediaStreamAudioDestinationNode | null = null;
   private masterAnalyser: AnalyserNode | null = null;
+  private monitorGain: GainNode | null = null; // Bus de pre-escucha / auditoría por auriculares del PC
+  private isMonitorEnabled = false;
+  private monitorVolume = 1.0;
 
   // Canales por Peer ID
   private channels = new Map<
@@ -55,9 +58,15 @@ export class AudioMixerEngine {
 
       this.masterDestination = this.ctx.createMediaStreamDestination();
 
+      // Bus de auditoría física por auriculares del realizador (Master -> MonitorGain -> Altavoces/Auriculares PC)
+      this.monitorGain = this.ctx.createGain();
+      this.monitorGain.gain.setValueAtTime(0.0, this.ctx.currentTime); // Inicia silenciado
+
       // Enrutamiento maestro: MasterGain -> MasterAnalyser -> MasterDestination
       this.masterGain.connect(this.masterAnalyser);
       this.masterGain.connect(this.masterDestination);
+      this.masterGain.connect(this.monitorGain);
+      this.monitorGain.connect(this.ctx.destination);
     }
 
     if (this.ctx.state === 'suspended') {
@@ -159,6 +168,29 @@ export class AudioMixerEngine {
     if (this.masterGain && this.ctx) {
       this.masterGain.gain.setValueAtTime(Math.max(0, volume), this.ctx.currentTime);
     }
+  }
+
+  /**
+   * Activa/desactiva la auditoría de audio por auriculares del PC
+   */
+  public setHeadphonesMonitor(enabled: boolean) {
+    this.ensureContext();
+    this.isMonitorEnabled = enabled;
+    if (this.monitorGain && this.ctx) {
+      const targetGain = enabled ? this.monitorVolume : 0.0;
+      this.monitorGain.gain.setTargetAtTime(targetGain, this.ctx.currentTime, 0.04);
+    }
+  }
+
+  public setHeadphonesVolume(volume: number) {
+    this.monitorVolume = Math.max(0, Math.min(volume, 2.0));
+    if (this.isMonitorEnabled && this.monitorGain && this.ctx) {
+      this.monitorGain.gain.setTargetAtTime(this.monitorVolume, this.ctx.currentTime, 0.02);
+    }
+  }
+
+  public isHeadphonesActive(): boolean {
+    return this.isMonitorEnabled;
   }
 
   /**

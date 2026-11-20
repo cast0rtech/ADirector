@@ -35,6 +35,8 @@ export const App: React.FC = () => {
   const [audioChannels, setAudioChannels] = useState<AudioChannelState[]>([]);
   const [audioLevels, setAudioLevels] = useState<Map<string, { level: number; peakDb: number }>>(new Map());
   const [masterAudioLevel, setMasterAudioLevel] = useState(0);
+  const [isHeadphoneMonitorActive, setIsHeadphoneMonitorActive] = useState(false);
+  const [headphoneVolume, setHeadphoneVolume] = useState(1.0);
 
   // Estado de Grabación y Streaming RTMP
   const [isRecordingActive, setIsRecordingActive] = useState(false);
@@ -42,9 +44,10 @@ export const App: React.FC = () => {
   const [streamStats, setStreamStats] = useState<StreamStats | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
 
-  // Estado de Servidor y QR
+  // Estado de Servidor, URL Móvil y QR
   const [serverInfo, setServerInfo] = useState<{ httpsUrl: string; qrCodeDataUrl: string } | null>(null);
   const [showQrModal, setShowQrModal] = useState(false);
+  const [copiedUrl, setCopiedUrl] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'connected' | 'disconnected'>('connecting');
 
   const receiverRef = useRef<WebRtcHostReceiver | null>(null);
@@ -317,6 +320,25 @@ export const App: React.FC = () => {
     setAudioChannels(audioMixer.getAllChannels());
   };
 
+  const handleToggleHeadphoneMonitor = () => {
+    const next = !isHeadphoneMonitorActive;
+    setIsHeadphoneMonitorActive(next);
+    audioMixer.setHeadphonesMonitor(next);
+  };
+
+  const handleHeadphoneVolumeChange = (vol: number) => {
+    setHeadphoneVolume(vol);
+    audioMixer.setHeadphonesVolume(vol);
+  };
+
+  const handleCopyUrl = () => {
+    if (serverInfo?.httpsUrl) {
+      navigator.clipboard.writeText(serverInfo.httpsUrl);
+      setCopiedUrl(true);
+      setTimeout(() => setCopiedUrl(false), 2500);
+    }
+  };
+
   // Lista de fuentes disponibles para asignar a slots
   const availableSources = useMemo(() => {
     const list: Array<{ id: string; name: string; isScreen?: boolean }> = [];
@@ -391,7 +413,44 @@ export const App: React.FC = () => {
         </div>
 
         {/* Controles de Grabación, RTMP, NDI y VCam */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+          {serverInfo && (
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                background: 'rgba(30, 41, 59, 0.7)',
+                padding: '4px 10px',
+                borderRadius: '8px',
+                border: '1px solid rgba(255, 255, 255, 0.1)',
+                fontSize: '12px',
+              }}
+            >
+              <span style={{ color: '#94a3b8' }}>Web Cámara:</span>
+              <span style={{ fontFamily: 'monospace', color: '#38bdf8', fontWeight: 600 }}>
+                {serverInfo.httpsUrl}
+              </span>
+              <button
+                onClick={handleCopyUrl}
+                style={{
+                  padding: '3px 8px',
+                  background: copiedUrl ? '#10b981' : '#334155',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  fontSize: '11px',
+                  fontWeight: 600,
+                  transition: 'background 0.2s ease',
+                }}
+                title="Copiar URL para el navegador móvil"
+              >
+                {copiedUrl ? '✓ Copiado' : '📋 Copiar'}
+              </button>
+            </div>
+          )}
+
           <BroadcastControls
             onStartOutput={handleStartOutput}
             onStopOutput={handleStopOutput}
@@ -414,9 +473,10 @@ export const App: React.FC = () => {
               display: 'flex',
               alignItems: 'center',
               gap: '6px',
+              boxShadow: '0 0 12px rgba(37, 99, 235, 0.3)',
             }}
           >
-            📱 Conectar Móvil (QR)
+            📱 Vincular Móviles (Web / QR)
           </button>
         </div>
       </header>
@@ -425,7 +485,14 @@ export const App: React.FC = () => {
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden', padding: '14px', gap: '14px' }}>
         {/* Monitor de Salida Maestra (Program) y Controlador de Layouts */}
         <div style={{ flex: '0 0 46%', display: 'flex', flexDirection: 'column', overflowY: 'auto' }}>
-          <ProgramMonitor engine={programSwitcher} activeCameraName={activeCameraName} fps={fps} />
+          <ProgramMonitor
+            engine={programSwitcher}
+            activeCameraName={activeCameraName}
+            fps={fps}
+            isHeadphoneAuditActive={isHeadphoneMonitorActive}
+            isRecording={isRecordingActive}
+            isStreaming={isStreamingActive}
+          />
 
           {/* Controlador de Composición Multicámara (1, 2, 3 o 4 fuentes) y Pantalla PC */}
           <LayoutController
@@ -570,61 +637,208 @@ export const App: React.FC = () => {
         onToggleMute={handleToggleMute}
         onToggleSolo={handleToggleSolo}
         onMasterVolumeChange={(v) => audioMixer.setMasterVolume(v)}
+        isHeadphoneMonitorActive={isHeadphoneMonitorActive}
+        headphoneVolume={headphoneVolume}
+        onToggleHeadphoneMonitor={handleToggleHeadphoneMonitor}
+        onHeadphoneVolumeChange={handleHeadphoneVolumeChange}
       />
 
-      {/* Modal Código QR */}
+      {/* Modal Conexión de Móviles (Web y Código QR) */}
       {showQrModal && serverInfo && (
         <div
           onClick={() => setShowQrModal(false)}
           style={{
             position: 'fixed',
             inset: 0,
-            background: 'rgba(0,0,0,0.8)',
+            background: 'rgba(0,0,0,0.85)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             zIndex: 1000,
+            backdropFilter: 'blur(6px)',
           }}
         >
           <div
             onClick={(e) => e.stopPropagation()}
             style={{
-              background: '#1e293b',
-              padding: '28px',
-              borderRadius: '16px',
-              textAlign: 'center',
-              maxWidth: '380px',
+              background: '#0f172a',
+              padding: '30px',
+              borderRadius: '18px',
+              maxWidth: '560px',
+              width: '90%',
               border: '1px solid rgba(255,255,255,0.15)',
+              boxShadow: '0 20px 40px rgba(0,0,0,0.6)',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '18px',
             }}
           >
-            <h3 style={{ margin: '0 0 12px 0' }}>Conectar Cámara Móvil</h3>
-            <p style={{ fontSize: '13px', color: '#94a3b8', margin: '0 0 16px 0' }}>
-              Escanea este código con la cámara de tu iPhone o Android en la misma red Wi-Fi:
-            </p>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <span style={{ fontSize: '24px' }}>📱</span>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '18px', color: '#f8fafc' }}>
+                    Conectar Cámara Móvil
+                  </h3>
+                  <span style={{ fontSize: '12px', color: '#64748b' }}>
+                    Conecta iPhones o Androids en tu misma red Wi-Fi
+                  </span>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowQrModal(false)}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: '#94a3b8',
+                  fontSize: '20px',
+                  cursor: 'pointer',
+                  padding: '4px 8px',
+                }}
+              >
+                ✕
+              </button>
+            </div>
 
-            <img
-              src={serverInfo.qrCodeDataUrl}
-              alt="Código QR de Conexión"
-              style={{ width: '220px', height: '220px', borderRadius: '10px', background: '#fff', padding: '8px' }}
-            />
+            {/* Dos métodos de conexión: QR y Web Link */}
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: '1fr 1fr',
+                gap: '20px',
+                alignItems: 'center',
+                background: '#1e293b',
+                padding: '18px',
+                borderRadius: '12px',
+                border: '1px solid rgba(255,255,255,0.06)',
+              }}
+            >
+              {/* Opción 1: Código QR */}
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
+                <span style={{ fontSize: '12px', fontWeight: 700, color: '#38bdf8', marginBottom: '8px' }}>
+                  OPCIÓN 1: ESCANEAR QR
+                </span>
+                <img
+                  src={serverInfo.qrCodeDataUrl}
+                  alt="Código QR de Conexión"
+                  style={{
+                    width: '180px',
+                    height: '180px',
+                    borderRadius: '10px',
+                    background: '#fff',
+                    padding: '8px',
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+                  }}
+                />
+                <span style={{ fontSize: '11px', color: '#94a3b8', marginTop: '8px' }}>
+                  Apunta con la app Cámara de tu teléfono
+                </span>
+              </div>
 
-            <p style={{ fontSize: '12px', fontFamily: 'monospace', color: '#38bdf8', marginTop: '12px' }}>
-              {serverInfo.httpsUrl}
-            </p>
+              {/* Opción 2: Enlace Web Directo */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                <span style={{ fontSize: '12px', fontWeight: 700, color: '#10b981' }}>
+                  OPCIÓN 2: VÍA NAVEGADOR WEB
+                </span>
+                <p style={{ margin: 0, fontSize: '12px', color: '#cbd5e1', lineHeight: '1.4' }}>
+                  Abre Safari (iPhone) o Chrome (Android) e ingresa esta dirección:
+                </p>
+
+                <div
+                  style={{
+                    background: '#090d16',
+                    padding: '10px',
+                    borderRadius: '8px',
+                    border: '1px solid rgba(255,255,255,0.1)',
+                  }}
+                >
+                  <p
+                    style={{
+                      margin: 0,
+                      fontSize: '13px',
+                      fontFamily: 'monospace',
+                      color: '#38bdf8',
+                      wordBreak: 'break-all',
+                      fontWeight: 700,
+                    }}
+                  >
+                    {serverInfo.httpsUrl}
+                  </p>
+                </div>
+
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button
+                    onClick={handleCopyUrl}
+                    style={{
+                      flex: 1,
+                      padding: '8px 12px',
+                      background: copiedUrl ? '#10b981' : '#2563eb',
+                      color: '#fff',
+                      border: 'none',
+                      borderRadius: '6px',
+                      fontSize: '12px',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      transition: 'background 0.2s',
+                    }}
+                  >
+                    {copiedUrl ? '✓ ¡Enlace Copiado!' : '📋 Copiar Enlace'}
+                  </button>
+
+                  <a
+                    href={serverInfo.httpsUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    style={{
+                      padding: '8px 12px',
+                      background: '#334155',
+                      color: '#fff',
+                      border: 'none',
+                      borderRadius: '6px',
+                      fontSize: '12px',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      textDecoration: 'none',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                    }}
+                  >
+                    Abrir Web ↗
+                  </a>
+                </div>
+              </div>
+            </div>
+
+            {/* Aviso de Validación de Certificado Local */}
+            <div
+              style={{
+                background: 'rgba(245, 158, 11, 0.1)',
+                border: '1px solid rgba(245, 158, 11, 0.3)',
+                borderRadius: '8px',
+                padding: '10px 14px',
+                fontSize: '11px',
+                color: '#fde68a',
+                lineHeight: '1.4',
+              }}
+            >
+              🔒 <strong>Primera conexión (HTTPS Local Seguro):</strong> Safari y Chrome mostrarán un aviso por certificado autofirmado LAN.
+              Pulsa <em>"Mostrar detalles"</em> o <em>"Configuración avanzada"</em> y luego <em>"Acceder a la dirección"</em> para conceder permiso de cámara y micrófono.
+            </div>
 
             <button
               onClick={() => setShowQrModal(false)}
               style={{
-                marginTop: '16px',
-                padding: '8px 20px',
+                padding: '10px',
                 background: '#334155',
                 color: '#fff',
                 border: 'none',
-                borderRadius: '6px',
+                borderRadius: '8px',
+                fontSize: '13px',
+                fontWeight: 600,
                 cursor: 'pointer',
               }}
             >
-              Cerrar
+              Listo / Cerrar
             </button>
           </div>
         </div>

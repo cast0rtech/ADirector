@@ -9,6 +9,10 @@ interface AudioMixerDockProps {
   onToggleMute: (peerId: string) => void;
   onToggleSolo: (peerId: string) => void;
   onMasterVolumeChange: (volume: number) => void;
+  isHeadphoneMonitorActive: boolean;
+  headphoneVolume: number;
+  onToggleHeadphoneMonitor: () => void;
+  onHeadphoneVolumeChange: (volume: number) => void;
 }
 
 export const AudioMixerDock: React.FC<AudioMixerDockProps> = ({
@@ -18,6 +22,10 @@ export const AudioMixerDock: React.FC<AudioMixerDockProps> = ({
   onToggleMute,
   onToggleSolo,
   onMasterVolumeChange,
+  isHeadphoneMonitorActive,
+  headphoneVolume,
+  onToggleHeadphoneMonitor,
+  onHeadphoneVolumeChange,
 }) => {
   return (
     <div
@@ -152,7 +160,7 @@ export const AudioMixerDock: React.FC<AudioMixerDockProps> = ({
           gap: '10px',
         }}
       >
-        <span style={{ fontSize: '12px', fontWeight: 700, color: '#f8fafc' }}>MASTER</span>
+        <span style={{ fontSize: '12px', fontWeight: 700, color: '#f8fafc' }}>SALIDA MASTER</span>
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
           <VuMeter level={masterLevel} height={90} width={12} />
           <input
@@ -172,7 +180,71 @@ export const AudioMixerDock: React.FC<AudioMixerDockProps> = ({
             }}
           />
         </div>
-        <span style={{ fontSize: '10px', color: '#94a3b8' }}>Salida Directa</span>
+        <span style={{ fontSize: '10px', color: '#94a3b8' }}>Bus PGM</span>
+      </div>
+
+      {/* Auditoría de Salida (Auriculares / Monitor local) */}
+      <div
+        style={{
+          background: isHeadphoneMonitorActive ? 'rgba(16, 185, 129, 0.1)' : '#131b2e',
+          border: isHeadphoneMonitorActive
+            ? '1px solid #10b981'
+            : '1px solid rgba(255,255,255,0.12)',
+          borderRadius: '8px',
+          padding: '12px 16px',
+          minWidth: '140px',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          gap: '10px',
+          boxShadow: isHeadphoneMonitorActive ? '0 0 12px rgba(16, 185, 129, 0.2)' : 'none',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <span style={{ fontSize: '12px', fontWeight: 700, color: isHeadphoneMonitorActive ? '#10b981' : '#cbd5e1' }}>
+            🎧 AUDITORÍA
+          </span>
+        </div>
+
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          <input
+            type="range"
+            min="0"
+            max="1.5"
+            step="0.02"
+            value={headphoneVolume}
+            disabled={!isHeadphoneMonitorActive}
+            onChange={(e) => onHeadphoneVolumeChange(parseFloat(e.target.value))}
+            style={{
+              writingMode: 'vertical-lr',
+              direction: 'rtl',
+              height: '90px',
+              width: '20px',
+              cursor: isHeadphoneMonitorActive ? 'pointer' : 'not-allowed',
+              accentColor: '#38bdf8',
+              opacity: isHeadphoneMonitorActive ? 1 : 0.4,
+            }}
+            title="Volumen Auriculares Auditoría"
+          />
+        </div>
+
+        <button
+          onClick={onToggleHeadphoneMonitor}
+          style={{
+            padding: '5px 10px',
+            borderRadius: '6px',
+            border: 'none',
+            fontSize: '11px',
+            fontWeight: 700,
+            cursor: 'pointer',
+            background: isHeadphoneMonitorActive ? '#10b981' : '#334155',
+            color: isHeadphoneMonitorActive ? '#022c22' : '#f8fafc',
+            transition: 'all 0.2s ease',
+            width: '100%',
+          }}
+        >
+          {isHeadphoneMonitorActive ? '🔊 AUDIT ON' : '🔈 AUDIT OFF'}
+        </button>
       </div>
     </div>
   );

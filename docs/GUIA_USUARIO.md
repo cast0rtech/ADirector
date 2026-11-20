@@ -73,11 +73,18 @@ Al iniciar, la consola mostrará la dirección IP asignada y el **código QR** p
 
 ---
 
-## 3. Conexión de Teléfonos Móviles
+## 3. Conexión de Teléfonos Móviles (Web o Código QR)
 
-1. En la consola de escritorio, pulsa el botón **`📱 Conectar Móvil (QR)`** situado en la cabecera, o utiliza el código QR impreso en la terminal.
-2. Abre la app de Cámara de tu teléfono y escanea el código QR.
-3. Se abrirá la URL segura: `https://<TU-IP-LOCAL>:8443`.
+Puedes conectar cualquier teléfono móvil al sistema mediante dos métodos sencillos:
+
+### Método A: Escanear el Código QR
+1. En la consola de escritorio, pulsa el botón **`📱 Vincular Móviles (Web / QR)`** en la barra superior.
+2. Abre la app nativa de **Cámara** en tu iPhone o Android y enfoca el código QR en pantalla.
+3. Toca la notificación emergente para abrir el enlace en tu navegador móvil.
+
+### Método B: Ingresar la Dirección Web Directa
+1. Si prefieres no usar la cámara para escanear, copia la dirección web que se muestra en la cabecera de la app (ejemplo: `https://192.168.1.3:8443/cam`) pulsando **`📋 Copiar`**.
+2. Abre **Safari** en iOS o **Google Chrome** en Android y pega la URL en la barra de direcciones.
 
 > [!IMPORTANT]
 > **Permiso del Certificado SSL Autofirmado:**
@@ -131,27 +138,44 @@ Una vez cargada la aplicación web en el teléfono, la interfaz HUD táctil ofre
 
 ## 5. Consola de Realización de Escritorio
 
-### Multivista y Tally en Vivo
-La parte derecha de la consola despliega todas las fuentes WebRTC conectadas en una cuadrícula autoajustable:
-- **Tally Gris:** La cámara está conectada y en espera (*Standby*).
-- **Tally Rojo Pulsante:** La cámara está seleccionada en **PROGRAM (AL AIRE)**.
-- **Vúmetro LED:** Cada celda muestra un vúmetro en tiempo real que indica si el presentador u operador está hablando.
+### Previsualización Multicámara (Multiview) y Tally en Vivo
+La parte derecha de la consola despliega todas las fuentes WebRTC conectadas y la pantalla del PC en una cuadrícula autoajustable:
+- **Tally Gris:** La fuente está conectada y en espera (*Standby*).
+- **Tally Azul:** La cámara está asignada a un recuadro secundario en la salida compuesta (Slot 2, 3 o 4).
+- **Tally Rojo Pulsante:** La cámara es la fuente principal en **PROGRAM (AL AIRE)** (Slot 1).
+- **Vúmetro LED por Cámara:** Cada celda muestra un medidor VU con indicador de pico dB en tiempo real.
+- **Selector '+ Slot':** Permite asignar la cámara directamente a cualquiera de los recuadros de composición (*Slot 1, 2, 3 o 4*).
+- **Clic Directo:** Al pulsar sobre cualquier celda, se conmuta al instante como fuente principal de Program (*Cut to Program*).
 
-### Conmutación sin Cortes (Program Cut)
-- Para pasar una cámara al aire, **haz clic sobre su recuadro en la multivista**.
-- La señal se conmutará instantáneamente en el lienzo `<canvas>` maestro a **1080p@60fps** sin saltos, sin pérdidas de cuadros y sin cortes de audio.
+### Auditoría Técnica y Visual de la Salida Program
+El monitor de Program (esquina superior izquierda) cuenta con una suite completa de auditoría:
+- **Badge Técnico en Vivo:** Muestra la resolución de salida activa (hasta **2.7K `2720x1530`** o **1080p `1920x1080`**), tasa de cuadros por segundo (**60 FPS**), estado de transmisión RTMP y grabación en disco.
+- **Tira de Auditoría de Composición:** Detalla qué fuentes están componiendo la salida en cada momento (ej. `Slot 1: iPhone 13 | Slot 2: Pantalla PC`).
+- **Botón `⛶ Fullscreen`:** Maximiza la señal Program a pantalla completa en un monitor secundario dedicado o en la pantalla principal para auditoría de calidad de imagen por el director.
+
+### Composición Multicámara y Captura de Pantalla PC
+- **Layouts Soportados:**
+  - **1 CÁMARA (SOLO):** Modo clásico de corte directo a pantalla completa.
+  - **2 CÁMARAS (PiP):** Imagen principal con recuadro flotante en la esquina inferior derecha.
+  - **2 CÁMARAS (SPLIT):** División horizontal 50% / 50% lado a lado.
+  - **3 CÁMARAS (TRI-VIEW):** Cámara principal en mitad izquierda y dos cámaras apiladas en la derecha.
+  - **4 CÁMARAS (QUAD 2x2):** Cuadrícula simétrica de 4 fuentes simultáneas.
+- **Compartir Pantalla del PC:** Pulsa **`🖥️ Compartir Pantalla PC`** para incorporar presentaciones, diapositivas, videojuegos o videollamadas a cualquier slot de salida, con audio de sistema sincronizado.
 
 ### Control Remoto desde el PC
 Desde el propio PC de realización puedes controlar los teléfonos sin tocarlos físicamente:
-- **Botón `🔄 Lente`:** Envía una orden vía WebSocket al teléfono para alternar entre sus sensores físicos.
+- **Botón `🔄 Lente`:** Envía una orden vía WebSocket al teléfono para alternar entre sus sensores físicos (Frontal, Principal, Ultra Gran Angular).
 - **Botón `⚡ Flash`:** Enciende o apaga la linterna/antorcha trasera del smartphone para iluminar al presentador en entornos oscuros.
 
-### Mezclador de Audio Independiente (Web Audio API)
-Situado en la parte inferior de la ventana:
-- **Fader Vertical:** Ajusta la ganancia de cada micrófono de forma independiente (de `0.0` a `1.5`).
+### Mezclador de Audio y Auditoría de Auriculares (Web Audio API)
+Situado en el dock inferior de la ventana:
+- **Fader Individual:** Ajusta la ganancia de cada micrófono de forma independiente (de `0.0` a `1.5`).
 - **Botón `M` (Mute):** Silencia temporalmente ese teléfono sin cortar su video.
 - **Botón `S` (Solo):** Escucha y emite exclusivamente esa fuente de audio, atenuando las demás automáticamente.
-- **Canal MASTER:** Controla el volumen general de la mezcla estéreo unificada que se envía a grabación, RTMP, NDI y Cámara Virtual.
+- **Canal MASTER:** Controla el volumen general de la mezcla estéreo que se envía a grabación, RTMP, NDI y Cámara Virtual.
+- **Módulo de Auditoría de Salida (`🎧 AUDITORÍA`):**
+  - **Botón `🔊 AUDIT ON/OFF`:** Conecta la mezcla maestra directamente a los auriculares del director u operador a través de la salida de audio local del PC.
+  - **Fader de Volumen de Auriculares:** Permite regular el volumen de escucha personal del operador sin modificar el nivel máster de la transmisión o grabación.
 
 ---
 
