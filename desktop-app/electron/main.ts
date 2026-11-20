@@ -1,13 +1,13 @@
 import { app, BrowserWindow, ipcMain } from 'electron';
 import path from 'path';
-import { fileURLToPath } from 'url';
+import fs from 'fs';
 import { FFmpegManager, StreamConfig } from './ffmpegManager.js';
 import { NdiOutputEngine } from './ndiOutput.js';
 import { VirtualCamEngine } from './virtualCamOutput.js';
 import { detectSystemCapabilities } from './systemCaps.js';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+// Manejo de directorio en Electron CJS
+const currentDir = typeof __dirname !== 'undefined' ? __dirname : process.cwd();
 
 let mainWindow: BrowserWindow | null = null;
 const ffmpegManager = new FFmpegManager();
@@ -15,22 +15,28 @@ const ndiOutput = new NdiOutputEngine('ADIRECTOR (Program)');
 const virtualCam = new VirtualCamEngine();
 
 function createWindow() {
-  const iconPath = path.join(__dirname, '../assets/icon.png');
+  const iconPath = path.join(currentDir, '../assets/icon.png');
+
+  // Buscar preload.cjs (o preload.js)
+  let preloadPath = path.join(currentDir, 'preload.cjs');
+  if (!fs.existsSync(preloadPath)) {
+    preloadPath = path.join(currentDir, 'preload.js');
+  }
 
   mainWindow = new BrowserWindow({
     width: 1480,
     height: 920,
     minWidth: 1024,
     minHeight: 720,
-    icon: iconPath,
+    icon: fs.existsSync(iconPath) ? iconPath : undefined,
     backgroundColor: '#040711',
     webPreferences: {
-      preload: path.join(__dirname, 'preload.js'),
+      preload: preloadPath,
       nodeIntegration: false,
       contextIsolation: true,
       backgroundThrottling: false,
     },
-    title: 'ADirector Studio - NDI & Virtual Cam Broadcast',
+    title: 'ADirector Studio - Production Switcher',
   });
 
   // Notificar estadísticas y estados al renderer
@@ -58,13 +64,17 @@ function createWindow() {
     mainWindow?.webContents.send('stream:error', `[VirtualCam] ${err}`);
   };
 
-  const isDev = process.env.NODE_ENV !== 'production';
-  if (isDev) {
-    mainWindow.loadURL('https://localhost:8443');
+  // Cargar la interfaz de producción de escritorio directamente
+  const distHtml = path.join(currentDir, '../dist/index.html');
+  if (fs.existsSync(distHtml)) {
+    console.log('[Electron] Cargando UI de escritorio desde dist/index.html');
+    mainWindow.loadFile(distHtml);
   } else {
-    mainWindow.loadFile(path.join(__dirname, '../dist/index.html'));
+    console.log('[Electron] Cargando UI desde servidor local https://localhost:8443');
+    mainWindow.loadURL('https://localhost:8443/studio');
   }
 
+  // Ignorar advertencias de certificado autofirmado en Electron para localhost / LAN
   mainWindow.webContents.on('certificate-error', (event, url, error, certificate, callback) => {
     if (url.includes('127.0.0.1') || url.includes('localhost') || url.includes('192.168.')) {
       event.preventDefault();
@@ -129,15 +139,12 @@ app.whenReady().then(() => {
 
   // 5. Distribución de Chunks binarios hacia todas las salidas activas
   ipcMain.on('stream:chunk', (_event, buffer: Buffer) => {
-    // Si FFmpeg está grabando o transmitiendo a RTMP
     ffmpegManager.writeChunk(buffer);
 
-    // Si NDI está transmitiendo en red local
     if (ndiOutput.isActive()) {
       ndiOutput.writeChunk(buffer);
     }
 
-    // Si la Cámara Virtual está alimentando a Zoom/Meet
     if (virtualCam.isActive()) {
       virtualCam.writeChunk(buffer);
     }

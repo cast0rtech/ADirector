@@ -4,16 +4,20 @@
   "description": "Multi-camera LAN WebRTC video production system for Desktop and Mobile",
   "private": true,
   "type": "module",
-  "main": "desktop-app/electron/main.js",
+  "main": "desktop-app/electron/main.cjs",
   "scripts": {
+    "build:ui": "esbuild desktop-app/src/index.tsx --bundle --outfile=desktop-app/dist/bundle.js --format=esm --jsx=automatic",
+    "build:electron": "esbuild desktop-app/electron/main.ts --bundle --platform=node --external:electron --outfile=desktop-app/electron/main.cjs && esbuild desktop-app/electron/preload.ts --bundle --platform=node --external:electron --outfile=desktop-app/electron/preload.cjs",
     "build:server": "tsc -p server/tsconfig.json",
+    "build": "npm run build:ui && npm run build:electron && npm run build:server",
     "start:server": "tsx server/src/server.ts",
-    "dev:server": "tsx watch server/src/server.ts",
-    "dev": "tsx watch server/src/server.ts",
-    "dist": "electron-builder",
-    "dist:mac": "electron-builder --mac",
-    "dist:win": "electron-builder --win",
-    "dist:linux": "electron-builder --linux"
+    "start:app": "electron desktop-app/electron/main.cjs",
+    "start": "npm run build:ui && npm run build:electron && node -e \"const { spawn } = require('child_process'); const s = spawn('npx', ['tsx', 'server/src/server.ts'], { stdio: 'inherit' }); setTimeout(() => spawn('npx', ['electron', 'desktop-app/electron/main.cjs'], { stdio: 'inherit' }), 1000);\"",
+    "dev": "npm run build:ui && npm run build:electron && node -e \"const { spawn } = require('child_process'); const s = spawn('npx', ['tsx', 'server/src/server.ts'], { stdio: 'inherit' }); setTimeout(() => spawn('npx', ['electron', 'desktop-app/electron/main.cjs'], { stdio: 'inherit' }), 1000);\"",
+    "dist": "npm run build && electron-builder",
+    "dist:mac": "npm run build && electron-builder --mac",
+    "dist:win": "npm run build && electron-builder --win",
+    "dist:linux": "npm run build && electron-builder --linux"
   },
   "build": {
     "appId": "com.adirector.studio",
@@ -22,7 +26,8 @@
       "output": "release"
     },
     "files": [
-      "desktop-app/electron/**/*",
+      "desktop-app/electron/main.cjs",
+      "desktop-app/electron/preload.cjs",
       "desktop-app/dist/**/*",
       "desktop-app/assets/**/*",
       "server/**/*",
@@ -62,6 +67,8 @@
   "dependencies": {
     "express": "^4.21.2",
     "qrcode": "^1.5.4",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
     "selfsigned": "^2.4.1",
     "ws": "^8.18.0"
   },
@@ -69,9 +76,12 @@
     "@types/express": "^5.0.0",
     "@types/node": "^22.10.2",
     "@types/qrcode": "^1.5.5",
+    "@types/react": "^19.0.8",
+    "@types/react-dom": "^19.0.3",
     "@types/ws": "^8.5.13",
     "electron": "^33.2.1",
     "electron-builder": "^25.1.8",
+    "esbuild": "^0.24.2",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2"
   }

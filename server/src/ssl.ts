@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import selfsigned from 'selfsigned';
+import { getAllLocalIps } from './network.js';
 
 export interface SslCertificates {
   key: string;
@@ -12,7 +13,7 @@ export interface SslCertificates {
  * compatible con iOS (Safari) y Android (Chrome) para el uso de getUserMedia en IP local.
  *
  * Requisitos de iOS 13+ / Safari:
- * - SAN que incluya explícitamente la dirección IP y localhost.
+ * - SAN que incluya explícitamente todas las IPs locales y localhost.
  * - Validez no mayor a 398 días (usamos 365 días).
  * - Extended Key Usage para Server Authentication.
  */
@@ -21,10 +22,15 @@ export function getOrCreateCertificates(localIp: string, certsDir: string): SslC
   const certPath = path.join(certsDir, 'server.crt');
 
   if (fs.existsSync(keyPath) && fs.existsSync(certPath)) {
-    return {
-      key: fs.readFileSync(keyPath, 'utf8'),
-      cert: fs.readFileSync(certPath, 'utf8'),
-    };
+    const existingCert = fs.readFileSync(certPath, 'utf8');
+    // Verificar si el certificado ya incluye la IP local actual
+    if (existingCert.includes(localIp)) {
+      return {
+        key: fs.readFileSync(keyPath, 'utf8'),
+        cert: existingCert,
+      };
+    }
+    console.log(`[SSL] La IP local cambió a ${localIp}. Regenerando certificado...`);
   }
 
   if (!fs.existsSync(certsDir)) {
@@ -38,6 +44,20 @@ export function getOrCreateCertificates(localIp: string, certsDir: string): SslC
     { name: 'organizationName', value: 'ADirector Local Studio' },
     { shortName: 'OU', value: 'WebRTC Studio' },
   ];
+
+  // Incluir todas las IPs locales detectadas en el SAN
+  const allIps = getAllLocalIps();
+  const altNames: Array<{ type: number; value?: string; ip?: string }> = [
+    { type: 2, value: 'localhost' },
+    { type: 7, ip: '127.0.0.1' },
+    { type: 7, ip: localIp },
+  ];
+
+  for (const item of allIps) {
+    if (item.address !== localIp && item.address !== '127.0.0.1') {
+      altNames.push({ type: 7, ip: item.address });
+    }
+  }
 
   const pems = selfsigned.generate(attrs, {
     keySize: 2048,
@@ -63,11 +83,7 @@ export function getOrCreateCertificates(localIp: string, certsDir: string): SslC
       },
       {
         name: 'subjectAltName',
-        altNames: [
-          { type: 2, value: 'localhost' },
-          { type: 7, ip: '127.0.0.1' },
-          { type: 7, ip: localIp },
-        ],
+        altNames,
       },
     ],
   });
@@ -75,7 +91,7 @@ export function getOrCreateCertificates(localIp: string, certsDir: string): SslC
   fs.writeFileSync(keyPath, pems.private, { encoding: 'utf8' });
   fs.writeFileSync(certPath, pems.cert, { encoding: 'utf8' });
 
-  console.log(`[SSL] Certificados guardados en ${certsDir}`);
+  console.log(`[SSL] Certificados guardados con SAN en ${certsDir}`);
 
   return {
     key: pems.private,
