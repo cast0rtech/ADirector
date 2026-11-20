@@ -8,8 +8,12 @@
   "scripts": {
     "build": "node scripts/build.js",
     "build:server": "tsc -p server/tsconfig.json",
+    "dev:server": "tsx watch server/src/server.ts",
+    "dev:app": "node scripts/build.js && electron desktop-app/electron/main.js",
     "start:server": "tsx server/src/server.ts",
     "start:app": "electron desktop-app/electron/main.js",
+    "server": "tsx server/src/server.ts",
+    "app": "electron desktop-app/electron/main.js",
     "start": "node scripts/build.js && node -e \"const { spawn } = require('child_process'); spawn('npx', ['tsx', 'server/src/server.ts'], { stdio: 'inherit' }); setTimeout(() => spawn('npx', ['electron', 'desktop-app/electron/main.js'], { stdio: 'inherit' }), 1200);\"",
     "dev": "node scripts/build.js && node -e \"const { spawn } = require('child_process'); spawn('npx', ['tsx', 'server/src/server.ts'], { stdio: 'inherit' }); setTimeout(() => spawn('npx', ['electron', 'desktop-app/electron/main.js'], { stdio: 'inherit' }), 1200);\"",
     "dist": "npm run build && electron-builder",
